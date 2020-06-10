@@ -3,6 +3,12 @@ This project shows how to compute a corresponding point
 in other images base on the point in reference image. 
 We have known the accurate pose of camera (T).
 
+### Reference Point
+![reference_circle.png](https://github.com/HugoNip/MonoDenseReconstruction2.0v/blob/master/results/reference_circle.png)
+
+### Estimated Point
+![final_circle_0001.png](https://github.com/HugoNip/MonoDenseReconstruction2.0v/blob/master/results/final_circle_0001.png)
+
 ## Requirements
 
 ### Eigen Package (Version >= 3.0.0)
