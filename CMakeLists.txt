@@ -17,5 +17,5 @@ include_directories(${Sophus_INCLUDE_DIRS})
 
 set(THIRD_PARTY_LIBS ${OpenCV_LIBS} ${Sophus_LIBRARIES})
 
-add_executable(dense_mono dense_mono.cpp)
+add_executable(dense_mono pointMatching.cpp)
 target_link_libraries(dense_mono ${THIRD_PARTY_LIBS})
