@@ -42,6 +42,7 @@ bool readDatasetFiles(
  * @param ref            reference frame
  * @param curr           current frame
  * @param T_C_R          pose from Reference frame to Current frame
+ * @param sel_point      selected point in the reference frame
  * @param depth_mu       depth
  * @param depth_cov2     depth sigma^2
  * @return               successful
@@ -50,10 +51,24 @@ bool update(
         const cv::Mat &ref,
         const cv::Mat &curr,
         const Sophus::SE3d &T_C_R,
-        const cv::Point2f &sel_point,
+        const Eigen::Vector2d &sel_point,
         double &depth_mu,
         double &depth_cov2,
         Eigen::Vector2d &pt_curr);
+
+/**
+ * compute the corresponding points (P2)
+ * @param T_C_R          pose from Reference frame to Current frame
+ * @param pt_ref         point in the reference frame
+ * @param depth_ref      depth of point pt_ref in the reference frame
+ * @param pt_curr        estimated point
+ */
+void computeP2(
+        const Sophus::SE3d &T_C_R,
+        const Eigen::Vector2d pt_ref,
+        const double &depth_ref,
+        Eigen::Vector2d &pt_curr
+        );
 
 /**
  * epipolar search

@@ -20,12 +20,12 @@ int main() {
     Sophus::SE3d pose_ref_TWC = poses_TWC[0];
     double depth = 3.0; // initial depth mu
     double depth_cov2 = 3.0; // initial depth sigma^2
-    cv::Point2f sel_point = cv::Point2f(400, 320);
+    Eigen::Vector2d sel_point = Eigen::Vector2d(400, 320); // [x, y] = sel_point[0][1]
     double curr_sq_error = 0;
     Eigen::Vector2d pt_curr, pt_final;
-    bool ret_update;
+    bool ret_update, ret_estimate;
 
-    std::cout << "Select point: [" << sel_point.x << ", " << sel_point.y << "]" << std::endl;
+    std::cout << "Select point: [" << sel_point[0] << ", " << sel_point[1] << "]" << std::endl;
 
     // process image one-by-one
     for (int index = 1; index < color_image_files.size(); ++index) {
@@ -41,13 +41,36 @@ int main() {
 
         ret_update = update(ref, curr, pose_T_C_R, sel_point, depth, depth_cov2, pt_curr);
 
-        evaluateDepth(ref_depth.ptr<double>(int(sel_point.y))[int(sel_point.x)], depth, curr_sq_error);
+        evaluateDepth(ref_depth.ptr<double>(int(sel_point[1]))[int(sel_point[0])], depth, curr_sq_error);
 
-        if (!ret_update == false)
-            showEpipolarMatch(ref, curr, Eigen::Vector2d(sel_point.x, sel_point.y), pt_curr, index);
+        // if (!ret_update == false)
+        //     showEpipolarMatch(ref, curr, Eigen::Vector2d(sel_point.x, sel_point.y), pt_curr, index);
     }
 
-    std::cout << "Done!" << std::endl;
+    std::cout << "Optimization has been done!" << std::endl;
+    std::cout << "The depth at the point (" << sel_point[0] << ", " << sel_point[1]
+              << ") in reference point is " << depth << "." << std::endl;
+
+    // compute the corresponding point
+    std::cout << "Now, start to compute the corresponding points ..." << std::endl;
+    Eigen::Vector2d pt_corr; // corresponding points
+    for (int index = 0; index < color_image_files.size(); ++index) {
+
+        // show loop-th
+        std::cout << "*** loop " << index << " ***" << std::endl;
+        cv::Mat curr = cv::imread(color_image_files[index], 0);
+        std::cout << "Current image: " << color_image_files[index] << std::endl;
+        if (curr.data == nullptr) continue;
+
+        Sophus::SE3d pose_curr_TWC = poses_TWC[index];
+        Sophus::SE3d pose_T_C_R = pose_curr_TWC.inverse() * pose_ref_TWC; // pose transform: T_C_W * T_W_R  = T_C_R
+
+        // compute the corresponding point
+        computeP2(pose_T_C_R, sel_point, depth, pt_corr);
+
+        // draw the points and save the image
+        showEpipolarMatch(ref, curr, sel_point, pt_corr, index);
+    }
 
     return 0;
 }
@@ -104,7 +127,7 @@ bool update(
         const cv::Mat &ref,
         const cv::Mat &curr,
         const Sophus::SE3d &T_C_R,
-        const cv::Point2f &sel_point,
+        const Eigen::Vector2d &sel_point,
         double &depth_mu, // update
         double &depth_cov2, // update
         Eigen::Vector2d &pt_curr) {
@@ -115,16 +138,26 @@ bool update(
     // find a matching point for (x, y) along epilopar line
     Eigen::Vector2d epipolar_direction;
     bool ret = epipolarSearch(
-            ref, curr, T_C_R, Eigen::Vector2d(sel_point.x, sel_point.y),
+            ref, curr, T_C_R, sel_point,
             depth_mu, sqrt(depth_cov2),
             pt_curr, epipolar_direction);
 
     if (ret == false) { return false; }
 
-    updateDepthFilter(Eigen::Vector2d(sel_point.x, sel_point.y), pt_curr, T_C_R, epipolar_direction, depth_mu, depth_cov2);
+    updateDepthFilter(sel_point, pt_curr, T_C_R, epipolar_direction, depth_mu, depth_cov2);
     std::cout << "estimated point: [" << pt_curr.x() << ", " << pt_curr.y() << "]." << std::endl;
+}
 
+void computeP2(
+        const Sophus::SE3d &T_C_R,
+        const Eigen::Vector2d pt_ref,
+        const double &depth_ref,
+        Eigen::Vector2d &pt_curr) {
 
+    Eigen::Vector3d f_ref = px2cam(pt_ref);
+    f_ref.normalize();
+    Eigen::Vector3d P_ref = f_ref * depth_ref;
+    pt_curr = cam2px(T_C_R * P_ref); // projection point in current frame
 }
 
 bool epipolarSearch(
@@ -141,6 +174,7 @@ bool epipolarSearch(
     f_ref.normalize();
     Eigen::Vector3d P_ref = f_ref * depth_mu;
     Eigen::Vector2d px_mean_curr = cam2px(T_C_R * P_ref); // projection point in current frame
+
     double d_min = depth_mu - 3 * depth_cov, d_max = depth_mu + 3 * depth_cov;
     if (d_min < 0.1) d_min = 0.1;
     Eigen::Vector2d px_min_curr = cam2px(T_C_R * (f_ref * d_min)); // projected point in current frame for minimized depth
