@@ -33,6 +33,7 @@ const double max_cov = 10; // scattered: max sigma
 // read data from REMODE
 bool readDatasetFiles(
         const std::string &path,
+        const std::string &filename,
         std::vector<std::string> &color_image_files,
         std::vector<Sophus::SE3d> &poses,
         cv::Mat &ref_depth);

@@ -1,42 +1,44 @@
 #include "pointMatching.h"
 
 std::string file_dir = "../data";
+std::string train_file_name = "/first_200_frames_traj_over_table_input_sequence_Train.txt";
+std::string test_file_name = "/first_200_frames_traj_over_table_input_sequence_Test.txt";
 
 int main() {
 
     // read data
-    std::vector<std::string> color_image_files;
-    std::vector<Sophus::SE3d> poses_TWC;
+    std::vector<std::string> train_color_image_files, test_color_image_files;
+    std::vector<Sophus::SE3d> train_poses_TWC, test_poses_TWC;
     cv::Mat ref_depth;
-    bool ret = readDatasetFiles(file_dir, color_image_files, poses_TWC, ref_depth);
-    if (ret == false) {
+    bool train_ret = readDatasetFiles(file_dir, train_file_name, train_color_image_files, train_poses_TWC, ref_depth);
+    if (train_ret == false) {
         std::cout << "Reading image files failed!" << std::endl;
         return -1;
     }
-    std::cout << "Read total " << color_image_files.size() << " files." << std::endl;
+    std::cout << "Read total " << train_color_image_files.size() << " files." << std::endl;
 
     // reference image
-    cv::Mat ref = cv::imread(color_image_files[0], 0); // gray-scale image
-    Sophus::SE3d pose_ref_TWC = poses_TWC[0];
+    cv::Mat ref = cv::imread(train_color_image_files[0], 0); // gray-scale image
+    Sophus::SE3d pose_ref_TWC = train_poses_TWC[0];
     double depth = 3.0; // initial depth mu
     double depth_cov2 = 3.0; // initial depth sigma^2
-    Eigen::Vector2d sel_point = Eigen::Vector2d(400, 320); // [x, y] = sel_point[0][1]
+    Eigen::Vector2d sel_point = Eigen::Vector2d(400, 300); // [x, y] = sel_point[0][1]
     double curr_sq_error = 0;
     Eigen::Vector2d pt_curr, pt_final;
-    bool ret_update, ret_estimate;
+    bool ret_update;
 
     std::cout << "Select point: [" << sel_point[0] << ", " << sel_point[1] << "]" << std::endl;
 
     // process image one-by-one
-    for (int index = 1; index < color_image_files.size(); ++index) {
+    for (int index = 1; index <  train_color_image_files.size(); ++index) {
 
         // show loop-th
         std::cout << "*** loop " << index << " ***" << std::endl;
-        cv::Mat curr = cv::imread(color_image_files[index], 0);
-        std::cout << "Current image: " << color_image_files[index] << std::endl;
+        cv::Mat curr = cv::imread(train_color_image_files[index], 0);
+        std::cout << "Current image: " << train_color_image_files[index] << std::endl;
         if (curr.data == nullptr) continue;
 
-        Sophus::SE3d pose_curr_TWC = poses_TWC[index];
+        Sophus::SE3d pose_curr_TWC = train_poses_TWC[index];
         Sophus::SE3d pose_T_C_R = pose_curr_TWC.inverse() * pose_ref_TWC; // pose transform: T_C_W * T_W_R  = T_C_R
 
         ret_update = update(ref, curr, pose_T_C_R, sel_point, depth, depth_cov2, pt_curr);
@@ -54,22 +56,28 @@ int main() {
     // compute the corresponding point
     std::cout << "Now, start to compute the corresponding points ..." << std::endl;
     Eigen::Vector2d pt_corr; // corresponding points
-    for (int index = 0; index < color_image_files.size(); ++index) {
+    bool test_ret = readDatasetFiles(file_dir, test_file_name, test_color_image_files, test_poses_TWC, ref_depth);
+    if (test_ret == false) {
+        std::cout << "Reading image files failed!" << std::endl;
+        return -1;
+    }
+    std::cout << "Read total " << train_color_image_files.size() << " files." << std::endl;
+    for (int index = 0; index < test_color_image_files.size(); ++index) {
 
         // show loop-th
         std::cout << "*** loop " << index << " ***" << std::endl;
-        cv::Mat curr = cv::imread(color_image_files[index], 0);
-        std::cout << "Current image: " << color_image_files[index] << std::endl;
+        cv::Mat curr = cv::imread(test_color_image_files[index], 0);
+        std::cout << "Current image: " << test_color_image_files[index] << std::endl;
         if (curr.data == nullptr) continue;
 
-        Sophus::SE3d pose_curr_TWC = poses_TWC[index];
+        Sophus::SE3d pose_curr_TWC = test_poses_TWC[index];
         Sophus::SE3d pose_T_C_R = pose_curr_TWC.inverse() * pose_ref_TWC; // pose transform: T_C_W * T_W_R  = T_C_R
 
         // compute the corresponding point
         computeP2(pose_T_C_R, sel_point, depth, pt_corr);
 
         // draw the points and save the image
-        showEpipolarMatch(ref, curr, sel_point, pt_corr, index);
+        showEpipolarMatch(ref, curr, sel_point, pt_corr, index + 1); // change the index to adapt the filename
     }
 
     return 0;
@@ -77,11 +85,12 @@ int main() {
 
 bool readDatasetFiles(
         const std::string &path,
+        const std::string &file_name,
         std::vector<std::string> &color_image_files,
         std::vector<Sophus::SE3d> &poses,
         cv::Mat &ref_depth) {
 
-    std::ifstream fin(path + "/first_200_frames_traj_over_table_input_sequence.txt");
+    std::ifstream fin(path + file_name);
     if (!fin) {
         std::cout << "reading image failed!" << std::endl;
         return false;
