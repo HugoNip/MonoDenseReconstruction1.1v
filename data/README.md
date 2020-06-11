@@ -2,4 +2,4 @@
 
 
 scene_000.png is used as reference frame.  
-We devided the dataset into train and test dataset.
+We devide the dataset into train and test dataset.
